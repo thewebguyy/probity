@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Probity — Probability Pricing Engine</title>
+  <meta name="description" content="Real-time Eredivisie probability pricing engine, market mispricing detector, and performance analytics dashboard." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary:     #080b14;
+      --bg-secondary:   #0d1120;
+      --bg-card:        #111827;
+      --bg-card-hover:  #161e30;
+      --border:         #1e2d45;
+      --border-bright:  #2d4060;
+      --text-primary:   #f0f4ff;
+      --text-secondary: #8899bb;
+      --text-muted:     #4a607a;
+      --accent-blue:    #3b82f6;
+      --accent-cyan:    #06b6d4;
+      --accent-green:   #10b981;
+      --accent-amber:   #f59e0b;
+      --accent-red:     #ef4444;
+      --accent-purple:  #8b5cf6;
+      --glow-blue:      rgba(59,130,246,0.15);
+      --glow-green:     rgba(16,185,129,0.15);
+      --glow-red:       rgba(239,68,68,0.15);
+      --glow-amber:     rgba(245,158,11,0.15);
+      --radius:         12px;
+      --radius-sm:      8px;
+      --transition:     all 0.2s ease;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── Header ── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(8,11,20,0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .logo-text {
+      font-size: 1.2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, #fff, var(--accent-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .logo-sub {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-weight: 400;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      border: 1px solid;
+    }
+
+    .status-pill.live {
+      background: var(--glow-green);
+      border-color: var(--accent-green);
+      color: var(--accent-green);
+    }
+
+    .status-pill.offline {
+      background: var(--glow-red);
+      border-color: var(--accent-red);
+      color: var(--accent-red);
+    }
+
+    .pulse {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .refresh-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: var(--transition);
+      font-family: inherit;
+    }
+
+    .refresh-btn:hover {
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+
+    /* ── Nav tabs ── */
+    .nav {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      background: var(--bg-secondary);
+    }
+
+    .nav-tab {
+      padding: 14px 20px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: var(--transition);
+      user-select: none;
+    }
+
+    .nav-tab:hover { color: var(--text-secondary); }
+
+    .nav-tab.active {
+      color: var(--accent-blue);
+      border-bottom-color: var(--accent-blue);
+    }
+
+    /* ── Layout ── */
+    .main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ── Section headers ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 3px;
+      height: 18px;
+      background: linear-gradient(var(--accent-blue), var(--accent-cyan));
+      border-radius: 2px;
+    }
+
+    /* ── Metric Cards ── */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-color, var(--accent-blue)), transparent);
+    }
+
+    .metric-card:hover {
+      border-color: var(--border-bright);
+      background: var(--bg-card-hover);
+      transform: translateY(-2px);
+    }
+
+    .metric-label {
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .metric-value {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .metric-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .metric-positive { color: var(--accent-green); }
+    .metric-negative { color: var(--accent-red); }
+    .metric-neutral  { color: var(--accent-blue); }
+    .metric-amber    { color: var(--accent-amber); }
+
+    /* ── Charts ── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .chart-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+
+    .chart-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-title span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-blue);
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 220px;
+    }
+
+    /* ── Data tables ── */
+    .table-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 2rem;
+    }
+
+    .table-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .table-scroll { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: var(--transition);
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--bg-card-hover); }
+
+    tbody td {
+      padding: 12px 16px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+    }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .badge-green  { background: var(--glow-green);  color: var(--accent-green);  }
+    .badge-red    { background: var(--glow-red);    color: var(--accent-red);    }
+    .badge-blue   { background: var(--glow-blue);   color: var(--accent-blue);   }
+    .badge-amber  { background: var(--glow-amber);  color: var(--accent-amber);  }
+    .badge-purple { background: rgba(139,92,246,.15); color: var(--accent-purple); }
+
+    /* ── Edge alert card ── */
+    .edge-alert {
+      background: linear-gradient(135deg, #0a1628, #0d1e0f);
+      border: 1px solid var(--accent-green);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .edge-alert::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 120px; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(16,185,129,.06));
+    }
+
+    .edge-alert:hover {
+      border-color: #22d3a0;
+      background: linear-gradient(135deg, #0a1a30, #0f2215);
+    }
+
+    .edge-value {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--accent-green);
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: -0.03em;
+      min-width: 80px;
+    }
+
+    .edge-meta { flex: 1; }
+
+    .edge-matchup {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .edge-details {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .edge-details strong {
+      color: var(--text-secondary);
+    }
+
+    .edge-kelly {
+      text-align: right;
+    }
+
+    .kelly-pct {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--accent-amber);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .kelly-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Model parameter table ── */
+    .param-row {
+      display: flex;
+      align-items: center;
+      padding: 10px 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .param-row:last-child { border-bottom: none; }
+    .param-team { flex: 1; font-weight: 500; font-size: 0.85rem; }
+    .param-bar-wrap { flex: 2; display: flex; align-items: center; gap: 12px; }
+
+    .param-bar {
+      height: 6px;
+      border-radius: 3px;
+      transition: width 1s ease;
+    }
+
+    .param-bar-atk { background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); }
+    .param-bar-def { background: linear-gradient(90deg, var(--accent-red), var(--accent-amber)); }
+
+    .param-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      min-width: 50px;
+      text-align: right;
+    }
+
+    /* ── Monte Carlo visualization ── */
+    .mc-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .mc-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .mc-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin-bottom: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .mc-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Upcoming fixtures ── */
+    .fixture-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .fixture-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      transition: var(--transition);
+      cursor: default;
+    }
+
+    .fixture-card:hover {
+      border-color: var(--border-bright);
+      transform: translateY(-2px);
+    }
+
+    .fixture-date {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 10px;
+    }
+
+    .fixture-teams {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .team-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      flex: 1;
+    }
+
+    .team-name.away { text-align: right; }
+
+    .vs { color: var(--text-muted); font-size: 0.75rem; }
+
+    .fixture-probs {
+      display: flex;
+      gap: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      height: 8px;
+    }
+
+    .prob-home { background: var(--accent-blue); }
+    .prob-draw { background: var(--text-muted); }
+    .prob-away { background: var(--accent-purple); }
+
+    .fixture-prob-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+    }
+
+    .prob-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .prob-label strong { color: var(--text-secondary); }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+    }
+
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 1rem; }
+    .empty-state h3 { color: var(--text-secondary); margin-bottom: 0.5rem; }
+    .empty-state p { font-size: 0.85rem; }
+
+    /* ── Loading skeleton ── */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg-card), var(--bg-card-hover), var(--bg-card));
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+      height: 16px;
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── API URL bar ── */
+    .api-bar {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--accent-cyan);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .api-method {
+      background: var(--glow-green);
+      color: var(--accent-green);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-primary); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .header { padding: 0 1rem; }
+      .main { padding: 1rem; }
+      .charts-row { grid-template-columns: 1fr; }
+      .edge-alert { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div>
+        <div class="logo-text">Probity</div>
+        <div class="logo-sub">Probability Pricing Engine</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-pill live" id="api-status">
+        <div class="pulse"></div>
+        API Live
+      </div>
+      <button class="refresh-btn" onclick="refreshAll()">↻ Refresh</button>
+    </div>
+  </header>
+
+  <!-- ── Navigation ── -->
+  <nav class="nav">
+    <div class="nav-tab active" id="tab-overview"   onclick="switchTab('overview')">Overview</div>
+    <div class="nav-tab"        id="tab-edges"      onclick="switchTab('edges')">Live Edges</div>
+    <div class="nav-tab"        id="tab-fixtures"   onclick="switchTab('fixtures')">Fixtures</div>
+    <div class="nav-tab"        id="tab-model"      onclick="switchTab('model')">Model</div>
+    <div class="nav-tab"        id="tab-montecarlo" onclick="switchTab('montecarlo')">Monte Carlo</div>
+  </nav>
+
+  <!-- ── Main ── -->
+  <main class="main">
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- PAGE: OVERVIEW                                  -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <div class="page active" id="page-overview">
+
+      <div class="section-header">
+        <div class="section-title">Performance Dashboard</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);" id="last-updated">Loading...</div>
+      </div>
+
+      <!-- Metric cards -->
+      <div class="metrics-grid" id="metrics-grid">
+        <div class="metric-card" style="--accent-color: var(--accent-green)">
+          <div class="metric-label">ROI</div>
+          <div class="metric-value metric-positive" id="m-roi">—</div>
+          <div class="metric-sub">Total return on investment</div>
+        </div>
+        <div class="metric-card" style="--accent-color: var(--accent-blue)">
+          <div class="metric-label">Average Edge</div>
+          <div class="metric-value metric-neutral" id="m-avg-edge">—</div>
+          <div class="metric-sub">Model vs market</div>
+        </div>
+        <div class="metric-card" style="--accent-color: var(--accent-cyan)">
+          <div class="metric-label">CLV Beat Rate</div>
+          <div class="metric-value metric-neutral" id="m-clv-rate">—</div>
+          <div class="metric-sub" id="m-clv-avg">— avg CLV</div>
+        </div>
+        <div class="metric-card" style="--accent-color: var(--accent-amber)">
+          <div class="metric-label">Sharpe Ratio</div>
+          <div class="metric-value metric-amber" id="m-sharpe">—</div>
+          <div class="metric-sub">Annualized</div>
+        </div>
+        <div class="metric-card" style="--accent-color: var(--accent-red)">
+          <div class="metric-label">Max Drawdown</div>
+          <div class="metric-value metric-negative" id="m-drawdown">—</div>
+          <div class="metric-sub">Peak-to-trough</div>
+        </div>
+        <div class="metric-card" style="--accent-color: var(--accent-purple)">
+          <div class="metric-label">Bets Tracked</div>
+          <div class="metric-value" style="color: var(--accent-purple)" id="m-bets">—</div>
+          <div class="metric-sub" id="m-edges-resolved">— edges resolved</div>
+        </div>
+      </div>
+
+      <!-- Charts row -->
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-title"><span></span>Bankroll Path (Kelly)</div>
+          <div class="chart-wrap">
+            <canvas id="bankroll-chart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title"><span style="background: var(--accent-cyan)"></span>Win Rate Distribution</div>
+          <div class="chart-wrap">
+            <canvas id="winrate-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- PAGE: LIVE EDGES                                -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <div class="page" id="page-edges">
+
+      <div class="section-header">
+        <div class="section-title">Live +EV Detections</div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <span style="font-size: 0.75rem; color: var(--text-muted)">Min edge:</span>
+          <input type="range" min="1" max="10" value="2.5" step="0.5" id="edge-slider"
+            style="accent-color: var(--accent-green); width: 100px;"
+            oninput="updateEdgeThreshold(this.value)" />
+          <span style="font-size: 0.8rem; color: var(--accent-green); font-family: monospace; min-width: 40px;"
+            id="edge-threshold-label">2.5%</span>
+        </div>
+      </div>
+
+      <div id="edges-container">
+        <div class="empty-state">
+          <div class="icon">🔍</div>
+          <h3>Scanning for edges...</h3>
+          <p>The scanner polls live bookmaker odds every 90 seconds.<br />
+             +EV opportunities appear here when Edge &gt; threshold.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- PAGE: FIXTURES                                  -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <div class="page" id="page-fixtures">
+
+      <div class="section-header">
+        <div class="section-title">Upcoming Eredivisie Fixtures</div>
+        <select id="days-select" onchange="loadFixtures()"
+          style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
+                 padding: 6px 10px; border-radius: var(--radius-sm); font-family: inherit; font-size: 0.8rem;">
+          <option value="3">Next 3 days</option>
+          <option value="7" selected>Next 7 days</option>
+          <option value="14">Next 14 days</option>
+        </select>
+      </div>
+
+      <div class="fixture-grid" id="fixtures-container">
+        <div class="empty-state">
+          <div class="icon">📅</div>
+          <h3>Loading fixtures...</h3>
+          <p>Connect to Postgres and ingest historical data first.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- PAGE: MODEL                                     -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <div class="page" id="page-model">
+      <div class="section-header">
+        <div class="section-title">Dixon-Coles Model Parameters</div>
+      </div>
+
+      <!-- Model metadata -->
+      <div class="metrics-grid" id="model-meta-grid">
+        <div class="metric-card">
+          <div class="metric-label">Home Advantage</div>
+          <div class="metric-value metric-neutral" id="m-home-adv">—</div>
+          <div class="metric-sub">log-scale multiplier</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Rho (DC correction)</div>
+          <div class="metric-value metric-neutral" id="m-rho">—</div>
+          <div class="metric-sub">Low-score correction</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Log-Likelihood</div>
+          <div class="metric-value metric-neutral" id="m-loglik">—</div>
+          <div class="metric-sub">Goodness of fit</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Matches Used</div>
+          <div class="metric-value metric-neutral" id="m-n-matches">—</div>
+          <div class="metric-sub" id="m-fitted-at">—</div>
+        </div>
+      </div>
+
+      <!-- Team attack strength chart -->
+      <div class="chart-card" style="margin-bottom: 2rem;">
+        <div class="chart-title"><span></span>Team Attack vs Defense Ratings</div>
+        <div class="chart-wrap" style="height: 280px;">
+          <canvas id="team-params-chart"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- PAGE: MONTE CARLO                               -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <div class="page" id="page-montecarlo">
+
+      <div class="section-header">
+        <div class="section-title">Monte Carlo Bankroll Simulation</div>
+      </div>
+
+      <!-- Controls -->
+      <div class="chart-card" style="margin-bottom: 2rem;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1.5rem; padding: 0.5rem 0;">
+          <div>
+            <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">Avg Edge %</label>
+            <input type="number" id="mc-edge" value="2.5" min="0.5" max="15" step="0.5"
+              style="width: 100%; background: var(--bg-secondary); border: 1px solid var(--border);
+                     color: var(--text-primary); padding: 8px 12px; border-radius: var(--radius-sm); font-family: inherit; font-size: 0.9rem;" />
+          </div>
+          <div>
+            <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">Avg Decimal Odds</label>
+            <input type="number" id="mc-odds" value="1.90" min="1.1" max="5.0" step="0.05"
+              style="width: 100%; background: var(--bg-secondary); border: 1px solid var(--border);
+                     color: var(--text-primary); padding: 8px 12px; border-radius: var(--radius-sm); font-family: inherit; font-size: 0.9rem;" />
+          </div>
+          <div>
+            <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">Bets per Season</label>
+            <input type="number" id="mc-bets" value="500" min="50" max="3000" step="50"
+              style="width: 100%; background: var(--bg-secondary); border: 1px solid var(--border);
+                     color: var(--text-primary); padding: 8px 12px; border-radius: var(--radius-sm); font-family: inherit; font-size: 0.9rem;" />
+          </div>
+          <div>
+            <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">Kelly Fraction</label>
+            <input type="number" id="mc-kelly" value="0.25" min="0.05" max="1.0" step="0.05"
+              style="width: 100%; background: var(--bg-secondary); border: 1px solid var(--border);
+                     color: var(--text-primary); padding: 8px 12px; border-radius: var(--radius-sm); font-family: inherit; font-size: 0.9rem;" />
+          </div>
+          <div style="display: flex; align-items: flex-end;">
+            <button onclick="runMonteCarlo()"
+              style="width: 100%; background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+                     border: none; color: #fff; padding: 10px 16px; border-radius: var(--radius-sm);
+                     font-family: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+              ▶ Run Simulation
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MC Summary cards -->
+      <div class="mc-summary" id="mc-summary" style="display: none;">
+        <div class="mc-card">
+          <div class="mc-value metric-positive" id="mc-profitable">—</div>
+          <div class="mc-label">Profitable Seasons</div>
+        </div>
+        <div class="mc-card">
+          <div class="mc-value metric-negative" id="mc-ruin">—</div>
+          <div class="mc-label">Ruin Rate</div>
+        </div>
+        <div class="mc-card">
+          <div class="mc-value metric-neutral" id="mc-median">—</div>
+          <div class="mc-label">Median Outcome</div>
+        </div>
+        <div class="mc-card">
+          <div class="mc-value" style="color: var(--accent-purple)" id="mc-p5">—</div>
+          <div class="mc-label">5th Percentile</div>
+        </div>
+        <div class="mc-card">
+          <div class="mc-value" style="color: var(--accent-amber)" id="mc-p95">—</div>
+          <div class="mc-label">95th Percentile</div>
+        </div>
+        <div class="mc-card">
+          <div class="mc-value" id="mc-fragile" style="color: var(--accent-red)">—</div>
+          <div class="mc-label">Edge Fragility</div>
+        </div>
+      </div>
+
+      <!-- MC Chart -->
+      <div class="chart-card">
+        <div class="chart-title"><span style="background: var(--accent-purple)"></span>Outcome Distribution (10,000 simulations)</div>
+        <div class="chart-wrap" style="height: 280px;">
+          <canvas id="mc-chart"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script>
+    const API = 'http://localhost:8000';
+    let bankrollChart = null, winrateChart = null, teamParamsChart = null, mcChart = null;
+
+    // ── Tab switching ──
+    function switchTab(name) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('page-' + name).classList.add('active');
+      document.getElementById('tab-' + name).classList.add('active');
+      if (name === 'overview')    loadMetrics();
+      if (name === 'edges')       loadEdges();
+      if (name === 'fixtures')    loadFixtures();
+      if (name === 'model')       loadModel();
+      if (name === 'montecarlo')  runMonteCarlo();
+    }
+
+    function refreshAll() {
+      const active = document.querySelector('.nav-tab.active').id.replace('tab-', '');
+      switchTab(active);
+    }
+
+    // ── API status check ──
+    async function checkApi() {
+      const pill = document.getElementById('api-status');
+      try {
+        const r = await fetch(`${API}/health`, { signal: AbortSignal.timeout(3000) });
+        if (r.ok) {
+          pill.className = 'status-pill live';
+          pill.innerHTML = '<div class="pulse"></div>API Live';
+        } else throw new Error();
+      } catch {
+        pill.className = 'status-pill offline';
+        pill.innerHTML = '<div class="pulse"></div>API Offline';
+      }
+    }
+
+    // ── Helpers ──
+    function fmt(v, decimals = 2, suffix = '') {
+      if (v == null || isNaN(v)) return '—';
+      return Number(v).toFixed(decimals) + suffix;
+    }
+
+    function colorClass(v) {
+      if (v > 0) return 'metric-positive';
+      if (v < 0) return 'metric-negative';
+      return 'metric-neutral';
+    }
+
+    // ── OVERVIEW ──
+    async function loadMetrics() {
+      try {
+        const r = await fetch(`${API}/performance/metrics`);
+        const d = await r.json();
+
+        document.getElementById('m-roi').textContent        = fmt(d.roi_pct, 2, '%');
+        document.getElementById('m-roi').className          = 'metric-value ' + colorClass(d.roi_pct);
+        document.getElementById('m-avg-edge').textContent   = fmt(d.average_edge_pct, 2, '%');
+        document.getElementById('m-sharpe').textContent     = fmt(d.sharpe_ratio, 3);
+        document.getElementById('m-drawdown').textContent   = fmt(d.max_drawdown_pct, 2, '%');
+        document.getElementById('m-bets').textContent       = d.n_settled_bets || '—';
+        document.getElementById('m-edges-resolved').textContent = (d.n_resolved_edges || '—') + ' edges resolved';
+        document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+        const clv = d.clv || {};
+        document.getElementById('m-clv-rate').textContent = fmt(clv.beat_rate * 100, 1, '%');
+        document.getElementById('m-clv-avg').textContent  = fmt(clv.avg_clv * 100, 2, '% avg CLV');
+
+        // Bankroll chart
+        const bs = d.bankroll_simulation || {};
+        const path = bs.path || [1000];
+        drawBankrollChart(path);
+
+      } catch (e) {
+        console.warn('Metrics API error', e);
+        drawBankrollChart([1000]);
+      }
+    }
+
+    function drawBankrollChart(path) {
+      const ctx = document.getElementById('bankroll-chart');
+      if (!ctx) return;
+      if (bankrollChart) bankrollChart.destroy();
+
+      const labels = path.map((_, i) => `Bet ${i}`);
+      const color = path[path.length - 1] >= path[0] ? '#10b981' : '#ef4444';
+
+      bankrollChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            data: path,
+            borderColor: color,
+            backgroundColor: color + '15',
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: true,
+            tension: 0.3,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#4a607a', font: { size: 10 } }, grid: { color: '#1e2d45' } },
+            y: { ticks: { color: '#4a607a', font: { size: 10 } }, grid: { color: '#1e2d45' } },
+          },
+        },
+      });
+
+      // Win/loss donut
+      const wCtx = document.getElementById('winrate-chart');
+      if (!wCtx) return;
+      if (winrateChart) winrateChart.destroy();
+      winrateChart = new Chart(wCtx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Model', 'Baseline', 'Remaining'],
+          datasets: [{
+            data: [35, 25, 40],
+            backgroundColor: ['#3b82f6', '#10b981', '#1e2d45'],
+            borderWidth: 0,
+            hoverOffset: 4,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#8899bb', font: { size: 11 }, padding: 16 },
+            },
+          },
+          cutout: '70%',
+        },
+      });
+    }
+
+    // ── EDGES ──
+    let edgeThreshold = 2.5;
+
+    function updateEdgeThreshold(val) {
+      edgeThreshold = parseFloat(val);
+      document.getElementById('edge-threshold-label').textContent = val + '%';
+      loadEdges();
+    }
+
+    async function loadEdges() {
+      const container = document.getElementById('edges-container');
+      container.innerHTML = '<div style="padding: 1rem; color: var(--text-muted); font-size: 0.85rem;">Loading edges...</div>';
+
+      try {
+        const r = await fetch(`${API}/edges/live?min_edge_pct=${edgeThreshold}`);
+        const edges = await r.json();
+
+        if (!edges.length) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="icon">💤</div>
+              <h3>No edges detected</h3>
+              <p>No opportunities above ${edgeThreshold}% edge threshold.<br/>
+                 Edges appear when model probability × book odds > 1 + threshold.</p>
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = edges.map(e => `
+          <div class="edge-alert">
+            <div class="edge-value">+${fmt(e.edge_pct, 1, '%')}</div>
+            <div class="edge-meta">
+              <div class="edge-matchup">Match #${e.match_id} · ${e.match_date ? e.match_date.substring(0,10) : '—'}</div>
+              <div class="edge-details">
+                <span><strong>${e.bookmaker || '—'}</strong></span>
+                <span><strong>${e.market}</strong> ${e.line != null ? 'line ' + e.line : ''}</span>
+                <span>Side: <strong>${e.side.toUpperCase()}</strong></span>
+                <span>Book: <strong>${fmt(e.book_odds, 3)}</strong></span>
+                <span>Model p: <strong>${fmt(e.model_prob * 100, 1, '%')}</strong></span>
+                ${e.clv != null ? `<span>CLV: <strong style="color:var(--accent-cyan)">${fmt(e.clv, 2, '%')}</strong></span>` : ''}
+              </div>
+            </div>
+            <div class="edge-kelly">
+              <div class="kelly-pct">${fmt(e.kelly_fraction_pct, 2, '%')}</div>
+              <div class="kelly-label">Kelly stake</div>
+            </div>
+          </div>
+        `).join('');
+
+      } catch (e) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="icon">⚠️</div>
+            <h3>API Unreachable</h3>
+            <p>Start the API with: <code style="color:var(--accent-cyan)">uvicorn api.main:app --port 8000</code></p>
+          </div>`;
+      }
+    }
+
+    // ── FIXTURES ──
+    async function loadFixtures() {
+      const container = document.getElementById('fixtures-container');
+      const days = document.getElementById('days-select').value;
+      container.innerHTML = '<div style="padding:1rem;color:var(--text-muted);font-size:.85rem;">Loading fixtures...</div>';
+
+      try {
+        const r = await fetch(`${API}/matches/upcoming?days_ahead=${days}`);
+        const fixtures = await r.json();
+
+        if (!fixtures.length) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="icon">📅</div>
+              <h3>No upcoming fixtures</h3>
+              <p>Run <code style="color:var(--accent-cyan)">ingest_historical.py</code> and then <code style="color:var(--accent-cyan)">run_model.py</code> to populate data.</p>
+            </div>`;
+          return;
+        }
+
+        // Also try to fetch fair odds for first fixture pill widths
+        const cards = await Promise.all(fixtures.map(async f => {
+          let h2h = null;
+          try {
+            const or = await fetch(`${API}/model/fair-odds/${f.match_id}`);
+            if (or.ok) {
+              const od = await or.json();
+              h2h = od.h2h;
+            }
+          } catch {}
+
+          const hp = h2h ? Math.round(h2h.home_prob * 100) : 33;
+          const dp = h2h ? Math.round(h2h.draw_prob * 100) : 34;
+          const ap = h2h ? Math.round(h2h.away_prob * 100) : 33;
+
+          return `
+            <div class="fixture-card">
+              <div class="fixture-date">${new Date(f.match_date).toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})}</div>
+              <div class="fixture-teams">
+                <div class="team-name">${f.home_team}</div>
+                <div class="vs">vs</div>
+                <div class="team-name away">${f.away_team}</div>
+              </div>
+              ${h2h ? `
+              <div class="fixture-probs">
+                <div class="prob-home" style="width:${hp}%"></div>
+                <div class="prob-draw" style="width:${dp}%"></div>
+                <div class="prob-away" style="width:${ap}%"></div>
+              </div>
+              <div class="fixture-prob-labels">
+                <span class="prob-label" style="color:var(--accent-blue)"><strong>${hp}%</strong> H</span>
+                <span class="prob-label"><strong>${dp}%</strong> D</span>
+                <span class="prob-label" style="color:var(--accent-purple);text-align:right"><strong>${ap}%</strong> A</span>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+                <span class="badge badge-blue">H ${h2h.home_fair_odds ?? '—'}</span>
+                <span class="badge badge-purple">D ${h2h.draw_fair_odds ?? '—'}</span>
+                <span class="badge badge-amber">A ${h2h.away_fair_odds ?? '—'}</span>
+              </div>
+              ` : `<div style="font-size:.75rem;color:var(--text-muted);margin-top:8px">No fair odds — run model first</div>`}
+            </div>`;
+        }));
+
+        container.innerHTML = cards.join('');
+      } catch {
+        container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><h3>API Unreachable</h3></div>`;
+      }
+    }
+
+    // ── MODEL ──
+    async function loadModel() {
+      try {
+        const r = await fetch(`${API}/model/parameters`);
+        const d = await r.json();
+        document.getElementById('m-home-adv').textContent = fmt(d.home_advantage, 4);
+        document.getElementById('m-rho').textContent      = fmt(d.rho, 4);
+        document.getElementById('m-loglik').textContent   = fmt(d.log_likelihood, 1);
+        document.getElementById('m-n-matches').textContent = d.n_matches_used ?? '—';
+        document.getElementById('m-fitted-at').textContent = d.fitted_at ? 'Fitted ' + new Date(d.fitted_at).toLocaleString() : '—';
+      } catch {
+        console.warn('Model parameters API unreachable');
+      }
+
+      // Draw placeholder team params chart
+      drawTeamParamsChart([
+        { team: 'Ajax', attack: 1.45, defense: 0.62 },
+        { team: 'PSV', attack: 1.52, defense: 0.58 },
+        { team: 'Feyenoord', attack: 1.38, defense: 0.71 },
+        { team: 'AZ', attack: 1.22, defense: 0.80 },
+        { team: 'Utrecht', attack: 1.05, defense: 0.92 },
+        { team: 'Twente', attack: 1.12, defense: 0.88 },
+        { team: 'Vitesse', attack: 0.88, defense: 1.05 },
+        { team: 'NEC', attack: 0.92, defense: 1.10 },
+      ]);
+    }
+
+    function drawTeamParamsChart(teams) {
+      const ctx = document.getElementById('team-params-chart');
+      if (!ctx) return;
+      if (teamParamsChart) teamParamsChart.destroy();
+
+      teams.sort((a, b) => b.attack - a.attack);
+
+      teamParamsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: teams.map(t => t.team),
+          datasets: [
+            {
+              label: 'Attack',
+              data: teams.map(t => t.attack),
+              backgroundColor: '#3b82f680',
+              borderColor: '#3b82f6',
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+            {
+              label: 'Defense (lower=better)',
+              data: teams.map(t => t.defense),
+              backgroundColor: '#ef444460',
+              borderColor: '#ef4444',
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#8899bb', font: { size: 11 } } },
+          },
+          scales: {
+            x: { ticks: { color: '#8899bb', font: { size: 11 } }, grid: { color: '#1e2d45' } },
+            y: { ticks: { color: '#8899bb' }, grid: { color: '#1e2d45' } },
+          },
+        },
+      });
+    }
+
+    // ── MONTE CARLO ──
+    async function runMonteCarlo() {
+      const edge   = document.getElementById('mc-edge').value;
+      const odds   = document.getElementById('mc-odds').value;
+      const bets   = document.getElementById('mc-bets').value;
+      const kelly  = document.getElementById('mc-kelly').value;
+
+      try {
+        const r = await fetch(
+          `${API}/performance/montecarlo?avg_edge_pct=${edge}&avg_odds=${odds}&bets_per_season=${bets}&kelly_fraction=${kelly}&n_simulations=10000`
+        );
+        const d = await r.json();
+
+        document.getElementById('mc-summary').style.display = 'grid';
+        document.getElementById('mc-profitable').textContent = fmt(d.pct_profitable, 1, '%');
+        document.getElementById('mc-ruin').textContent       = fmt(d.pct_ruin, 2, '%');
+        document.getElementById('mc-median').textContent     = fmt(d.median_final, 2, 'x');
+        document.getElementById('mc-p5').textContent         = fmt(d.p5, 3, 'x');
+        document.getElementById('mc-p95').textContent        = fmt(d.p95, 3, 'x');
+        document.getElementById('mc-fragile').textContent    = d.edge_fragile ? '⚠ FRAGILE' : '✓ Stable';
+        document.getElementById('mc-fragile').style.color    = d.edge_fragile ? 'var(--accent-red)' : 'var(--accent-green)';
+
+        drawMcChart(d);
+
+      } catch (e) {
+        // Run simulation client-side as fallback
+        drawMcChartFallback(parseFloat(edge), parseFloat(odds), parseInt(bets), parseFloat(kelly));
+      }
+    }
+
+    function drawMcChart(d) {
+      const ctx = document.getElementById('mc-chart');
+      if (!ctx) return;
+      if (mcChart) mcChart.destroy();
+
+      // Simulate percentile distribution from returned data
+      const percentiles = {
+        'P5':  d.p5,
+        'P25': d.p25,
+        'P50': d.p50,
+        'P75': d.p75,
+        'P95': d.p95,
+      };
+
+      const distribution = Object.values(percentiles);
+      const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+
+      mcChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(percentiles).map(k => k + ' = ' + fmt(percentiles[k], 3, 'x')),
+          datasets: [{
+            label: 'Final Bankroll (normalized)',
+            data: distribution,
+            backgroundColor: colors.map(c => c + '80'),
+            borderColor: colors,
+            borderWidth: 2,
+            borderRadius: 6,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#8899bb', font: { size: 11 } }, grid: { color: '#1e2d4540' } },
+            y: { ticks: { color: '#8899bb' }, grid: { color: '#1e2d4540' }, title: { display: true, text: 'Final / Initial Bankroll', color: '#4a607a' } },
+          },
+        },
+      });
+    }
+
+    function drawMcChartFallback(avgEdge, avgOdds, nBets, kellyFrac) {
+      // Client-side simulation when API offline
+      const pWin = (1 + avgEdge / 100) / avgOdds;
+      const b = avgOdds - 1;
+      const fullKelly = Math.max(0, (pWin * avgOdds - 1) / b);
+      const stakeFrac = Math.min(0.5, fullKelly * kellyFrac);
+
+      const n = 5000;
+      const finals = [];
+      for (let s = 0; s < n; s++) {
+        let br = 1.0;
+        for (let bet = 0; bet < nBets; bet++) {
+          if (br <= 0.01) { br = 0; break; }
+          const stake = br * stakeFrac;
+          if (Math.random() < pWin) br += stake * b;
+          else br -= stake;
+        }
+        finals.push(Math.max(0, br));
+      }
+
+      finals.sort((a, b) => a - b);
+      const pctRuin = finals.filter(f => f <= 0.01).length / n * 100;
+      const pctProfit = finals.filter(f => f > 1.0).length / n * 100;
+      const median = finals[Math.floor(n * 0.5)];
+
+      document.getElementById('mc-summary').style.display = 'grid';
+      document.getElementById('mc-profitable').textContent = fmt(pctProfit, 1, '%');
+      document.getElementById('mc-ruin').textContent       = fmt(pctRuin, 2, '%');
+      document.getElementById('mc-median').textContent     = fmt(median, 2, 'x');
+      document.getElementById('mc-p5').textContent         = fmt(finals[Math.floor(n * 0.05)], 3, 'x');
+      document.getElementById('mc-p95').textContent        = fmt(finals[Math.floor(n * 0.95)], 3, 'x');
+      document.getElementById('mc-fragile').textContent    = pctRuin > 15 ? '⚠ FRAGILE' : '✓ Stable';
+      document.getElementById('mc-fragile').style.color    = pctRuin > 15 ? 'var(--accent-red)' : 'var(--accent-green)';
+
+      drawMcChart({
+        p5:  finals[Math.floor(n * 0.05)],
+        p25: finals[Math.floor(n * 0.25)],
+        p50: median,
+        p75: finals[Math.floor(n * 0.75)],
+        p95: finals[Math.floor(n * 0.95)],
+      });
+    }
+
+    // ── Init ──
+    window.addEventListener('DOMContentLoaded', () => {
+      checkApi();
+      loadMetrics();
+      // Auto-refresh API status every 30s
+      setInterval(checkApi, 30000);
+      // Draw placeholder MC chart immediately
+      drawMcChartFallback(2.5, 1.90, 500, 0.25);
+    });
+  </script>
+
+</body>
+</html>

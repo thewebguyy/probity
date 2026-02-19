@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: probity-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: probity
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build: .
+    container_name: probity-api
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/probity
+      - DATABASE_URL_SYNC=postgresql://postgres:password@db:5432/probity
+    depends_on:
+      - db
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+
+  scanner:
+    build: .
+    container_name: probity-scanner
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/probity
+      - DATABASE_URL_SYNC=postgresql://postgres:password@db:5432/probity
+    depends_on:
+      - db
+    command: python scripts/run_scanner.py
+
+  model-trainer:
+    build: .
+    container_name: probity-model-trainer
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/probity
+      - DATABASE_URL_SYNC=postgresql://postgres:password@db:5432/probity
+    depends_on:
+      - db
+    # This service runs the nightly fit. In a real environment, 
+    # we'd use a cron job or just let the script handle its own recurrence.
+    command: python scripts/run_model.py
+
+volumes:
+  postgres_data:
