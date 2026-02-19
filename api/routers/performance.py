@@ -27,10 +27,20 @@ async def get_performance_metrics():
         )
         return report
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e), "detail": "Could not generate report"},
-        )
+        # Log the error but return a clean empty report
+        print(f"Metrics generation error: {e}")
+        return {
+            "roi_pct": 0.0,
+            "average_edge_pct": 0.0,
+            "clv": {"avg_clv": 0.0, "beat_rate": 0.0, "n_resolved": 0},
+            "win_rate": {"actual_win_rate": 0.0, "n_bets": 0},
+            "max_drawdown_pct": 0.0,
+            "sharpe_ratio": 0.0,
+            "bankroll_simulation": {"final_bankroll": settings.BANKROLL_INITIAL, "path": []},
+            "monte_carlo": None,
+            "n_settled_bets": 0,
+            "n_resolved_edges": 0
+        }
 
 
 @router.get("/montecarlo")

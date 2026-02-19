@@ -156,6 +156,7 @@ class OddsSnapshot(Base):
     draw_odds = Column(Float, nullable=True)
 
     is_closing = Column(Boolean, default=False)  # True when snapshot near kickoff
+    liquidity = Column(Float, nullable=True)     # Optional: market volume/depth
     snapshot_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -220,6 +221,7 @@ class Edge(Base):
     model_prob = Column(Float, nullable=False)
     book_odds = Column(Float, nullable=False)   # odds at detection time
     edge_value = Column(Float, nullable=False)  # (model_prob × book_odds) - 1
+    liquidity = Column(Float, nullable=True)    # liquidity at detection
 
     # CLV tracking
     closing_odds = Column(Float, nullable=True)  # filled in post-kickoff
