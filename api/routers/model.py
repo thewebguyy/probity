@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
-from core.models import FairOdds, Match, ModelRun, Team
+from core.models import FairOdds, Match, ModelRun, Team, TeamParam
 
 router = APIRouter()
 
@@ -94,7 +94,7 @@ async def get_fair_odds(match_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/parameters")
 async def get_model_parameters(league: str = "NL1", db: AsyncSession = Depends(get_db)):
-    """Latest Dixon-Coles model parameters (attack/defense per team)."""
+    """Latest Dixon-Coles model run metadata (no per-team params)."""
     run_q = await db.execute(
         select(ModelRun)
         .where(ModelRun.league == league)
@@ -114,4 +114,40 @@ async def get_model_parameters(league: str = "NL1", db: AsyncSession = Depends(g
         "n_matches_used": run.n_matches,
         "window_days": run.window_days,
         "fitted_at": run.fitted_at.isoformat() if run.fitted_at else None,
+    }
+
+
+@router.get("/team-params")
+async def get_team_params(league: str = "NL1", db: AsyncSession = Depends(get_db)):
+    """
+    Latest model run's team attack/defense parameters, sorted by attack descending.
+    For dashboard and operational monitor — no placeholder data.
+    """
+    run_q = await db.execute(
+        select(ModelRun)
+        .where(ModelRun.league == league)
+        .order_by(ModelRun.fitted_at.desc())
+        .limit(1)
+    )
+    run = run_q.scalars().first()
+    if not run:
+        raise HTTPException(status_code=404, detail="No model run found. Run model fit first.")
+
+    params_q = await db.execute(
+        select(TeamParam, Team.name)
+        .join(Team, Team.team_id == TeamParam.team_id)
+        .where(TeamParam.model_run_id == run.run_id)
+    )
+    rows = params_q.all()
+
+    team_params = [
+        {"team": name, "attack": round(tp.attack, 4), "defense": round(tp.defense, 4)}
+        for tp, name in rows
+    ]
+    team_params.sort(key=lambda x: -x["attack"])
+
+    return {
+        "run_id": run.run_id,
+        "fitted_at": run.fitted_at.isoformat() if run.fitted_at else None,
+        "teams": team_params,
     }

@@ -39,9 +39,10 @@ MARKET_MAP = {
 }
 
 
-def _resolve_match(session, home_name: str, away_name: str) -> Optional[Match]:
+def _resolve_match_id(session, home_name: str, away_name: str) -> Optional[int]:
     """
-    Try to find an existing Match by team names. Simple substring match.
+    Try to find an existing Match by team names. Returns match_id (scalar) or None.
+    Do not pass ORM objects outside session scope.
     """
     home_team = (
         session.query(Team)
@@ -55,17 +56,16 @@ def _resolve_match(session, home_name: str, away_name: str) -> Optional[Match]:
     )
     if not (home_team and away_team):
         return None
+    home_id = int(home_team.team_id)
+    away_id = int(away_team.team_id)
 
     match = (
-        session.query(Match)
-        .filter_by(
-            home_team_id=home_team.team_id,
-            away_team_id=away_team.team_id,
-        )
+        session.query(Match.match_id)
+        .filter_by(home_team_id=home_id, away_team_id=away_id)
         .order_by(Match.match_date.desc())
         .first()
     )
-    return match
+    return int(match[0]) if match else None
 
 
 def fetch_odds() -> list[dict]:
@@ -118,8 +118,8 @@ def process_and_store(events: list[dict]) -> int:
             away_name = event.get("away_team", "")
             commence_time = event.get("commence_time")
 
-            match = _resolve_match(session, home_name, away_name)
-            if not match:
+            match_id = _resolve_match_id(session, home_name, away_name)
+            if not match_id:
                 logger.debug("No DB match for %s vs %s — skipping", home_name, away_name)
                 continue
 
@@ -136,7 +136,7 @@ def process_and_store(events: list[dict]) -> int:
 
                     if mtype == MarketType.H2H:
                         snapshot = OddsSnapshot(
-                            match_id=match.match_id,
+                            match_id=match_id,
                             bookmaker=bm_key,
                             market_type=mtype,
                             line=None,
@@ -161,7 +161,7 @@ def process_and_store(events: list[dict]) -> int:
                             )
                             if name == "over":
                                 snapshot = OddsSnapshot(
-                                    match_id=match.match_id,
+                                    match_id=match_id,
                                     bookmaker=bm_key,
                                     market_type=mtype,
                                     line=point,
@@ -182,7 +182,7 @@ def process_and_store(events: list[dict]) -> int:
                                     None,
                                 )
                                 snapshot = OddsSnapshot(
-                                    match_id=match.match_id,
+                                    match_id=match_id,
                                     bookmaker=bm_key,
                                     market_type=mtype,
                                     line=point,

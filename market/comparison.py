@@ -34,6 +34,8 @@ from scipy.optimize import brentq
 
 from core.config import settings
 from core.database import SyncSessionLocal
+from sqlalchemy.orm import joinedload
+
 from core.models import (
     BetSide,
     Edge,
@@ -305,6 +307,25 @@ def _scan_snapshot(session, match, snap, min_edge, detected):
         if _check_rapid_line_movement(session, match.match_id, snap.market_type, snap.line, book_odds):
             continue
 
+        # Application-level deduplication: same match/bookmaker/market/line/side within cooldown
+        cooldown_hours = settings.EDGE_DEDUP_COOLDOWN_HOURS
+        cooldown_start = datetime.now(timezone.utc) - timedelta(hours=cooldown_hours)
+        existing = (
+            session.query(Edge)
+            .filter(
+                Edge.match_id == match.match_id,
+                Edge.bookmaker == snap.bookmaker,
+                Edge.market_type == snap.market_type,
+                Edge.line == snap.line,
+                Edge.side == side,
+                Edge.detected_at >= cooldown_start,
+            )
+            .first()
+        )
+        if existing:
+            existing.last_seen_at = datetime.now(timezone.utc)
+            continue
+
         kelly = kelly_fraction(model_prob, book_odds)
 
         edge_record = Edge(
@@ -357,32 +378,53 @@ def _scan_snapshot(session, match, snap, min_edge, detected):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def resolve_clv(hours_before_kickoff: int = 1) -> int:
+def resolve_clv(
+    hours_before_kickoff: Optional[int] = None,
+    max_staleness_hours: Optional[int] = None,
+) -> int:
     """
-    For finished edges without CLV filled in, find the closing odds
-    (snapshot closest to kickoff) and compute CLV.
+    For unresolved edges (kickoff passed), find closing odds from the
+    opportunity window and compute CLV.
+
+    Window: window_end = kickoff - hours_before_kickoff,
+            window_start = window_end - max_staleness_hours.
+    Query: same bookmaker, same market, snapshot_at in [window_start, window_end],
+           order by snapshot_at DESC, first row only.
+    Side-aware: HOME/OVER → home_odds, AWAY/UNDER → away_odds.
+    CLV = (book_odds / closing_odds) - 1.0.
+
+    If no snapshot in window: leave closing_odds and clv NULL (unresolved).
 
     Returns number of edges resolved.
     """
+    hours_before_kickoff = hours_before_kickoff or settings.CLV_HOURS_BEFORE_KICKOFF
+    max_staleness_hours = max_staleness_hours or settings.CLV_MAX_STALENESS_HOURS
     resolved = 0
+    now = datetime.now(timezone.utc)
+
     with SyncSessionLocal() as session:
         unresolved = (
             session.query(Edge)
-            .filter(Edge.closing_odds.is_(None))
+            .options(joinedload(Edge.match))
             .join(Match)
-            .filter(Match.match_date <= datetime.now(timezone.utc))
+            .filter(Edge.closing_odds.is_(None), Match.match_date <= now)
             .all()
         )
 
         for edge in unresolved:
-            cutoff = edge.match.match_date - timedelta(hours=hours_before_kickoff)
+            kickoff = edge.match.match_date
+            window_end = kickoff - timedelta(hours=hours_before_kickoff)
+            window_start = window_end - timedelta(hours=max_staleness_hours)
 
             closing_snap = (
                 session.query(OddsSnapshot)
                 .filter(
                     OddsSnapshot.match_id == edge.match_id,
+                    OddsSnapshot.bookmaker == edge.bookmaker,
                     OddsSnapshot.market_type == edge.market_type,
-                    OddsSnapshot.snapshot_at <= cutoff,
+                    OddsSnapshot.line == edge.line,
+                    OddsSnapshot.snapshot_at >= window_start,
+                    OddsSnapshot.snapshot_at <= window_end,
                 )
                 .order_by(OddsSnapshot.snapshot_at.desc())
                 .first()
@@ -391,16 +433,15 @@ def resolve_clv(hours_before_kickoff: int = 1) -> int:
             if not closing_snap:
                 continue
 
-            closing_odds = (
-                closing_snap.home_odds
-                if edge.side in (BetSide.HOME, BetSide.OVER)
-                else closing_snap.away_odds
-            )
+            if edge.side in (BetSide.HOME, BetSide.OVER):
+                closing_odds = closing_snap.home_odds
+            else:
+                closing_odds = closing_snap.away_odds
 
             if closing_odds and closing_odds > 0:
                 edge.closing_odds = closing_odds
                 edge.clv = (edge.book_odds / closing_odds) - 1.0
-                edge.resolved_at = datetime.now(timezone.utc)
+                edge.resolved_at = now
                 resolved += 1
 
         session.commit()

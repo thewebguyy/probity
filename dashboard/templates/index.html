@@ -936,7 +936,11 @@
   </main>
 
   <script>
-    const API = 'http://localhost:8000';
+    // Dynamic API base: use current host so dashboard works in containerized/production
+    const API = (function() {
+      const u = window.location;
+      return u.origin || (u.protocol + '//' + u.host);
+    })();
     let bankrollChart = null, winrateChart = null, teamParamsChart = null, mcChart = null;
 
     // ── Tab switching ──
@@ -1215,17 +1219,18 @@
         console.warn('Model parameters API unreachable');
       }
 
-      // Draw placeholder team params chart
-      drawTeamParamsChart([
-        { team: 'Ajax', attack: 1.45, defense: 0.62 },
-        { team: 'PSV', attack: 1.52, defense: 0.58 },
-        { team: 'Feyenoord', attack: 1.38, defense: 0.71 },
-        { team: 'AZ', attack: 1.22, defense: 0.80 },
-        { team: 'Utrecht', attack: 1.05, defense: 0.92 },
-        { team: 'Twente', attack: 1.12, defense: 0.88 },
-        { team: 'Vitesse', attack: 0.88, defense: 1.05 },
-        { team: 'NEC', attack: 0.92, defense: 1.10 },
-      ]);
+      // Real team params from latest model run (no placeholders)
+      try {
+        const tr = await fetch(`${API}/model/team-params`);
+        if (tr.ok) {
+          const tp = await tr.json();
+          drawTeamParamsChart(tp.teams || []);
+        } else {
+          drawTeamParamsChart([]);
+        }
+      } catch {
+        drawTeamParamsChart([]);
+      }
     }
 
     function drawTeamParamsChart(teams) {
@@ -1233,7 +1238,10 @@
       if (!ctx) return;
       if (teamParamsChart) teamParamsChart.destroy();
 
-      teams.sort((a, b) => b.attack - a.attack);
+      if (!teams || !teams.length) {
+        return;
+      }
+      teams = teams.slice().sort((a, b) => b.attack - a.attack);
 
       teamParamsChart = new Chart(ctx, {
         type: 'bar',

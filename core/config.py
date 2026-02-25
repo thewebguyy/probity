@@ -49,6 +49,17 @@ class Settings:
     EDGE_SCAN_INTERVAL_SECONDS: int = int(
         os.getenv("EDGE_SCAN_INTERVAL_SECONDS", "90")
     )
+    EDGE_DEDUP_COOLDOWN_HOURS: float = float(
+        os.getenv("EDGE_DEDUP_COOLDOWN_HOURS", "4")
+    )
+
+    # ─── CLV resolution ───────────────────────────────────────────────────────
+    CLV_HOURS_BEFORE_KICKOFF: int = int(
+        os.getenv("CLV_HOURS_BEFORE_KICKOFF", "1")
+    )
+    CLV_MAX_STALENESS_HOURS: int = int(
+        os.getenv("CLV_MAX_STALENESS_HOURS", "24")
+    )
 
     # ─── Kelly ────────────────────────────────────────────────────────────────
     KELLY_FRACTION: float = float(os.getenv("KELLY_FRACTION", "0.25"))
@@ -65,14 +76,31 @@ class Settings:
         "NL1": "Eredivisie",
     }
 
-    # Season codes used by football-data.co.uk URL pattern
-    # e.g. 2324 => 2023/24
-    SEASONS: list[str] = [
-        "2122",
-        "2223",
-        "2324",
-        "2425",
-    ]
+    # Season codes: generated dynamically (see get_seasons()). Rollover in July.
+    # e.g. 2526 => 2025/26; as of Feb 2026 current season is 2526.
+
+
+def get_seasons(years_back: int = 5) -> list[str]:
+    """
+    Generate season codes dynamically. Season rollover in July.
+    As of Feb 2026 → current season is 2526 (2025/26).
+    Returns list of strings oldest-first e.g. ["2122", "2223", ..., "2526"].
+    """
+    from datetime import date
+    today = date.today()
+    # Current season end year: if month >= July we're in YY(Y+1); else (Y-1)Y
+    if today.month >= 7:
+        end_yy = today.year % 100
+    else:
+        end_yy = (today.year - 1) % 100
+    seasons = []
+    for i in range(years_back):
+        y = end_yy - (years_back - 1 - i)
+        if y < 0:
+            continue
+        y1 = (y + 1) % 100
+        seasons.append(f"{y:02d}{y1:02d}")
+    return seasons
 
 
 settings = Settings()

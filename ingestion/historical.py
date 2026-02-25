@@ -52,18 +52,28 @@ def _download_csv(season: str, league_code: str = "N1") -> Optional[pd.DataFrame
     logger.info("Fetching %s", url)
     try:
         resp = requests.get(url, timeout=30)
+        if resp.status_code == 404:
+            logger.error("404 season not found: %s — URL %s", season, url)
+            return None
         resp.raise_for_status()
         df = pd.read_csv(io.StringIO(resp.text), encoding="ISO-8859-1")
         # Drop fully empty rows that appear at CSV end
         df = df.dropna(how="all")
         logger.info("Downloaded %d rows for season %s", len(df), season)
         return df
+    except requests.exceptions.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 404:
+            logger.error("404 season not found: %s — URL %s", season, url)
+        else:
+            logger.warning("Could not download %s: %s", url, exc)
+        return None
     except Exception as exc:
         logger.warning("Could not download %s: %s", url, exc)
         return None
 
 
-def _get_or_create_team(session, name: str) -> Team:
+def _get_or_create_team(session, name: str) -> int:
+    """Return team_id (scalar). Do not pass ORM outside session scope."""
     name = name.strip()
     team = session.query(Team).filter_by(name=name).first()
     if not team:
@@ -71,7 +81,7 @@ def _get_or_create_team(session, name: str) -> Team:
         session.add(team)
         session.flush()
         logger.debug("Created team: %s", name)
-    return team
+    return int(team.team_id)
 
 
 def _parse_date(val: str) -> Optional[datetime]:
@@ -120,8 +130,8 @@ def ingest_season(season: str) -> int:
             if not home_name or not away_name or home_name == "nan":
                 continue
 
-            home_team = _get_or_create_team(session, home_name)
-            away_team = _get_or_create_team(session, away_name)
+            home_team_id = _get_or_create_team(session, home_name)
+            away_team_id = _get_or_create_team(session, away_name)
 
             # Goals
             def _safe_int(v):
@@ -151,8 +161,8 @@ def ingest_season(season: str) -> int:
             existing = (
                 session.query(Match)
                 .filter_by(
-                    home_team_id=home_team.team_id,
-                    away_team_id=away_team.team_id,
+                    home_team_id=home_team_id,
+                    away_team_id=away_team_id,
                     match_date=match_date,
                 )
                 .first()
@@ -168,8 +178,8 @@ def ingest_season(season: str) -> int:
                     league="NL1",
                     match_date=match_date,
                     season=season,
-                    home_team_id=home_team.team_id,
-                    away_team_id=away_team.team_id,
+                    home_team_id=home_team_id,
+                    away_team_id=away_team_id,
                     home_goals=home_goals,
                     away_goals=away_goals,
                     home_xg=home_xg,
@@ -186,8 +196,9 @@ def ingest_season(season: str) -> int:
 
 
 def ingest_all_seasons(seasons: Optional[list[str]] = None) -> int:
-    """Ingest multiple seasons. Default: settings.SEASONS."""
-    seasons = seasons or settings.SEASONS
+    """Ingest multiple seasons. Default: dynamic from get_seasons()."""
+    from core.config import get_seasons
+    seasons = seasons or get_seasons()
     total = 0
     for s in seasons:
         total += ingest_season(s)

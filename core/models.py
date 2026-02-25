@@ -231,6 +231,7 @@ class Edge(Base):
 
     detected_at = Column(DateTime(timezone=True), server_default=func.now())
     resolved_at = Column(DateTime(timezone=True), nullable=True)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
 
     match = relationship("Match", back_populates="edges")
 

@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from ingestion.historical import ingest_all_seasons, ingest_season
-from core.config import settings
+from core.config import get_seasons
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,13 +30,14 @@ def main():
     parser.add_argument(
         "--seasons",
         nargs="+",
-        default=settings.SEASONS,
-        help="Season codes e.g. 2223 2324 (default: all configured seasons)",
+        default=None,
+        help="Season codes e.g. 2223 2324 (default: dynamic from current date, July rollover)",
     )
     args = parser.parse_args()
 
-    logger.info("Starting historical ingestion for seasons: %s", args.seasons)
-    total = ingest_all_seasons(args.seasons)
+    seasons = args.seasons or get_seasons()
+    logger.info("Starting historical ingestion for seasons: %s", seasons)
+    total = ingest_all_seasons(seasons)
     logger.info("Ingestion complete. Total new matches inserted: %d", total)
 
 
